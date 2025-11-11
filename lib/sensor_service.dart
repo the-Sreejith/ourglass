@@ -1,54 +1,68 @@
-// sensor_service.dart
-import 'package:sensors_plus/sensors_plus.dart';
 import 'dart:async';
-import 'dart:math' as math;
+import 'package:sensors_plus/sensors_plus.dart';
+
+// Enum to represent the discrete orientations we care about.
+enum DeviceOrientation {
+  upright,
+  upsideDown,
+  tilted,
+}
 
 class SensorService {
-  StreamSubscription? _accelerometerSubscription;
-  Function(double, bool)? _onTiltChanged;
+  // Stream controller to broadcast the orientation changes.
+  final StreamController<DeviceOrientation> _orientationController =
+      StreamController.broadcast();
   
-  static const double _tiltThreshold = 0.3;
+  // Public stream for widgets to listen to.
+  Stream<DeviceOrientation> get orientationStream => _orientationController.stream;
 
-  void startListening(Function(double, bool) onTiltChanged) {
-    _onTiltChanged = onTiltChanged;
-    
-    _accelerometerSubscription = accelerometerEvents.listen((event) {
-      // Calculate direction based on all three axes
-      // Using accelerometer gives us gravity direction which indicates device orientation
-      double x = event.x;
-      double y = event.y;
-      double z = event.z;
+  StreamSubscription? _accelerometerSubscription;
+  DeviceOrientation _currentOrientation = DeviceOrientation.tilted;
+
+  // Threshold for detecting upright or upside-down orientation.
+  // This value is based on gravity (9.8 m/s^2). 7.0 is a safe threshold.
+  static const double _orientationThreshold = 7.0;
+
+  void start() {
+    // Start listening to the accelerometer stream.
+    // We use the normal interval for a good balance of responsiveness and battery life.
+    _accelerometerSubscription = accelerometerEventStream(
+      samplingPeriod: SensorInterval.normalInterval,
+    ).listen((AccelerometerEvent event) {
+      final double y = event.y;
+      final double z = event.z;
       
-      // Calculate the magnitude of the tilt vector in the x-y plane
-      double magnitude = math.sqrt(x * x + y * y + z * z);
-      
-      // Normalize to avoid division by zero
-      if (magnitude < 0.1) {
-        _onTiltChanged?.call(0.0, false);
-        return;
+      DeviceOrientation newOrientation;
+
+      // Check if the phone is held relatively flat (on its back or front).
+      // We only want to detect flips when it's held vertically.
+      if (z.abs() < 4) {
+        // Phone is upright
+        if (y > _orientationThreshold) {
+          newOrientation = DeviceOrientation.upright;
+        // Phone is upside down
+        } else if (y < -_orientationThreshold) {
+          newOrientation = DeviceOrientation.upsideDown;
+        // Phone is vertical but not fully flipped (e.g., sideways)
+        } else {
+          newOrientation = DeviceOrientation.tilted;
+        }
+      } else {
+        // Phone is tilted, lying flat, or in another orientation.
+        newOrientation = DeviceOrientation.tilted;
       }
-      
-      // Calculate vertical component (z-axis, where device is upright when z ≈ 9.8)
-      // Normalize z to range [-1, 1] where -1 is upside down, 1 is upright
-      double normalizedZ = (z / magnitude).clamp(-1.0, 1.0);
-      
-      // Calculate horizontal tilt direction combining x and y
-      // When device tilts forward/backward (y-axis) or left/right (x-axis)
-      double horizontalTilt = y / magnitude;
-      
-      // Direction value: combines vertical orientation with horizontal tilt
-      // Positive when tilted one way, negative when tilted the other
-      double direction = horizontalTilt * (1.0 - normalizedZ.abs());
-      direction = direction.clamp(-1.0, 1.0);
-      
-      // Check if device is tilted enough to flow
-      bool isFlowing = direction.abs() > _tiltThreshold && normalizedZ.abs() < 0.9;
-      
-      _onTiltChanged?.call(direction, isFlowing);
+
+      // Only broadcast the event if the orientation has actually changed.
+      if (newOrientation != _currentOrientation) {
+        _currentOrientation = newOrientation;
+        _orientationController.add(_currentOrientation);
+      }
     });
   }
 
   void dispose() {
+    // Clean up resources.
     _accelerometerSubscription?.cancel();
+    _orientationController.close();
   }
 }

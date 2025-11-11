@@ -1,23 +1,20 @@
-// main.dart
 import 'package:flutter/material.dart';
-import 'hourglass_screen.dart';
+import 'hourglass_screen.dart'; // Import the new screen
 
 void main() {
   runApp(const HourglassApp());
 }
 
 class HourglassApp extends StatelessWidget {
-  const HourglassApp({Key? key}) : super(key: key);
+  const HourglassApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Pixelated Hourglass',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-        scaffoldBackgroundColor: const Color(0xFF1a1a2e),
-      ),
-      home: const HourglassScreen(),
+      title: 'Pixel Hourglass',
+      theme: ThemeData.dark(),
+      // The home is now the HourglassPage from the new file
+      home: const HourglassPage(), 
     );
   }
 }
