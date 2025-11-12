@@ -1,6 +1,7 @@
 import 'dart:async';
+import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:flutter/cupertino.dart'; // Import for CupertinoTimerPicker
+import 'package:flutter/cupertino.dart';
 import 'sensor_service.dart';
 
 class HourglassPage extends StatefulWidget {
@@ -18,51 +19,45 @@ class _HourglassPageState extends State<HourglassPage> {
   DeviceOrientation _orientation = DeviceOrientation.upright;
   bool _isFlowing = false;
 
-  // Constants for the hourglass
-  static const int _totalSand = 100; // Total "units" of sand
-  static const int _gridCells = 64; // 8x8 grid
+  static const int _totalSand = 100;
+  static const int _gridCells = 64;
 
-  // State for editable time
-  double _totalDurationInSeconds = 15.0; // Default time: 15 seconds
-  late Duration _sandTickDuration; // Will be calculated based on total time
-  double _timeLeftInSeconds = 0.0; // State for time left display
+  double _totalDurationInSeconds = 15.0;
+  late Duration _sandTickDuration;
+  double _timeLeftInSeconds = 0.0;
 
-  // State of the sand
   int _topSand = _totalSand;
   int _bottomSand = 0;
 
   @override
   void initState() {
     super.initState();
-    _timeLeftInSeconds = _totalDurationInSeconds; // Initialize time left
-    _updateTickDuration(); // Calculate initial tick duration
-    // Start the sensor service and listen for changes.
+    _timeLeftInSeconds = _totalDurationInSeconds;
+    _updateTickDuration();
+
     _sensorService.start();
-    _sensorSubscription =
-        _sensorService.orientationStream.listen(_handleOrientationChange);
-    // Start the flow immediately if the phone is upright.
+    _sensorSubscription = _sensorService.orientationStream.listen(
+      _handleOrientationChange,
+    );
+
     _startFlow();
   }
 
   @override
   void dispose() {
-    // Clean up all streams and timers.
     _sensorSubscription?.cancel();
     _sensorService.dispose();
     _sandTimer?.cancel();
     super.dispose();
   }
 
-  // Calculate how long each "unit" of sand should take to fall.
   void _updateTickDuration() {
-    // Ensure duration is at least 1 second to prevent issues
     if (_totalDurationInSeconds < 1) _totalDurationInSeconds = 1;
-    // Calculate milliseconds per tick
+
     final int tickMillis = (_totalDurationInSeconds * 1000) ~/ _totalSand;
-    // Ensure tick is at least 1ms
+
     _sandTickDuration = Duration(milliseconds: tickMillis > 0 ? tickMillis : 1);
 
-    // If flowing, restart the timer with the new duration
     if (_isFlowing) {
       _stopFlow();
       _startFlow();
@@ -76,14 +71,13 @@ class _HourglassPageState extends State<HourglassPage> {
       _orientation = newOrientation;
     });
 
-    // Logic to flip the hourglass when turned upside down.
     if (_orientation == DeviceOrientation.upright && _topSand == 0) {
       _flipSand();
-    } else if (_orientation == DeviceOrientation.upsideDown && _bottomSand == 0) {
+    } else if (_orientation == DeviceOrientation.upsideDown &&
+        _bottomSand == 0) {
       _flipSand();
     }
 
-    // Start or stop the flow based on orientation.
     if (_orientation == DeviceOrientation.upright ||
         _orientation == DeviceOrientation.upsideDown) {
       _startFlow();
@@ -98,9 +92,9 @@ class _HourglassPageState extends State<HourglassPage> {
       _topSand = _bottomSand;
       _bottomSand = temp;
 
-      // Recalculate time left based on the new "active" bulb
-      int activeSand =
-          (_orientation == DeviceOrientation.upright) ? _topSand : _bottomSand;
+      int activeSand = (_orientation == DeviceOrientation.upright)
+          ? _topSand
+          : _bottomSand;
       if (activeSand == 0) {
         _timeLeftInSeconds = 0.0;
       } else {
@@ -111,17 +105,15 @@ class _HourglassPageState extends State<HourglassPage> {
   }
 
   void _startFlow() {
-    // Don't start a new timer if one is already running.
     if (_isFlowing) return;
 
-    // Check if sand can flow in the current orientation.
     if (_orientation == DeviceOrientation.upright && _topSand == 0) return;
     if (_orientation == DeviceOrientation.upsideDown && _bottomSand == 0) {
       return;
     }
 
     _isFlowing = true;
-    // Start a periodic timer to move the sand.
+
     _sandTimer = Timer.periodic(_sandTickDuration, _tick);
   }
 
@@ -131,7 +123,6 @@ class _HourglassPageState extends State<HourglassPage> {
   }
 
   void _tick(Timer timer) {
-    // This function runs every time the timer "ticks".
     if (!mounted) {
       timer.cancel();
       return;
@@ -140,7 +131,6 @@ class _HourglassPageState extends State<HourglassPage> {
     bool isFlowing = false;
     int activeSand = 0;
 
-    // Handle sand flow for upright orientation
     if (_orientation == DeviceOrientation.upright) {
       if (_topSand > 0) {
         _topSand--;
@@ -148,7 +138,6 @@ class _HourglassPageState extends State<HourglassPage> {
         activeSand = _topSand;
         isFlowing = true;
       }
-      // Handle sand flow for upside-down orientation
     } else if (_orientation == DeviceOrientation.upsideDown) {
       if (_bottomSand > 0) {
         _bottomSand--;
@@ -164,7 +153,6 @@ class _HourglassPageState extends State<HourglassPage> {
             _totalDurationInSeconds * (activeSand / _totalSand);
       });
     } else {
-      // Stop flowing if tilted or empty
       _stopFlow();
       setState(() {
         _timeLeftInSeconds = 0.0;
@@ -172,9 +160,7 @@ class _HourglassPageState extends State<HourglassPage> {
     }
   }
 
-  // Format seconds into MM:SS string
   String _formatTime(double seconds) {
-    // Ceil to show 0:01 instead of 0:00 for the last bit
     int totalSeconds = seconds.ceil();
     if (totalSeconds < 0) totalSeconds = 0;
 
@@ -184,14 +170,11 @@ class _HourglassPageState extends State<HourglassPage> {
     return '${min.toString().padLeft(2, '0')}:${sec.toString().padLeft(2, '0')}';
   }
 
-  // Show the dialog to edit the time
   void _showTimeEditDialog() {
-    // Use a temporary variable for the picker
     Duration newDuration = Duration(seconds: _totalDurationInSeconds.round());
     showDialog(
       context: context,
       builder: (context) {
-        // Use StatefulBuilder to update the slider's label in the dialog
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
@@ -199,9 +182,9 @@ class _HourglassPageState extends State<HourglassPage> {
               contentPadding: const EdgeInsets.only(top: 12.0),
               content: SizedBox(
                 height: 180,
-                width: double.maxFinite, // <--- This is the fix
+                width: double.maxFinite,
                 child: CupertinoTimerPicker(
-                  mode: CupertinoTimerPickerMode.ms, // Minutes and Seconds
+                  mode: CupertinoTimerPickerMode.ms,
                   initialTimerDuration: newDuration,
                   onTimerDurationChanged: (value) {
                     setDialogState(() {
@@ -220,17 +203,15 @@ class _HourglassPageState extends State<HourglassPage> {
                   onPressed: () {
                     setState(() {
                       double newTime = newDuration.inSeconds.toDouble();
-                      if (newTime < 1.0) newTime = 1.0; // Min 1 second
+                      if (newTime < 1.0) newTime = 1.0;
 
                       _totalDurationInSeconds = newTime;
-                      _updateTickDuration(); // Apply the new time
+                      _updateTickDuration();
 
-                      // Reset sand
                       _topSand = _totalSand;
                       _bottomSand = 0;
                       _timeLeftInSeconds = _totalDurationInSeconds;
 
-                      // Restart flow
                       _stopFlow();
                       if (_orientation == DeviceOrientation.upright ||
                           _orientation == DeviceOrientation.upsideDown) {
@@ -250,7 +231,6 @@ class _HourglassPageState extends State<HourglassPage> {
 
   @override
   Widget build(BuildContext context) {
-    // Calculate the fill fraction for each bulb.
     double topFraction = _topSand / _totalSand;
     double bottomFraction = _bottomSand / _totalSand;
 
@@ -259,8 +239,6 @@ class _HourglassPageState extends State<HourglassPage> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: Text(
-            'Total: ${_totalDurationInSeconds.toStringAsFixed(0)}s'),
         actions: [
           IconButton(
             icon: const Icon(Icons.settings),
@@ -270,18 +248,20 @@ class _HourglassPageState extends State<HourglassPage> {
       ),
       body: Center(
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(
-              _formatTime(_timeLeftInSeconds),
-              style: const TextStyle(
-                fontSize: 48,
-                color: Colors.white,
-                fontWeight: FontWeight.w200,
-                fontFamily: 'monospace', // Gives it a nice "digital" look
+            GestureDetector(
+              onTap: _showTimeEditDialog,
+              child: Text(
+                _formatTime(_timeLeftInSeconds),
+                style: const TextStyle(
+                  fontSize: 48,
+                  color: Colors.white,
+                  fontWeight: FontWeight.w200,
+                  fontFamily: 'monospace',
+                ),
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 80),
             PixelHourglass(
               topSandFraction: topFraction,
               bottomSandFraction: bottomFraction,
@@ -294,13 +274,12 @@ class _HourglassPageState extends State<HourglassPage> {
   }
 }
 
-// A widget to render the hourglass shape with pixel bulbs.
 class PixelHourglass extends StatelessWidget {
   const PixelHourglass({
     super.key,
     required this.topSandFraction,
     required this.bottomSandFraction,
-    required this.totalGridCells,
+    required this.totalGridCells
   });
 
   final double topSandFraction;
@@ -309,39 +288,35 @@ class PixelHourglass extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Calculate the number of "full" pixels in each bulb.
     final int topFullCells = (topSandFraction * totalGridCells).round();
     final int bottomFullCells = (bottomSandFraction * totalGridCells).round();
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Top Bulb
         _PixelBulb(
+          key: const ValueKey('top'),
           sandCellCount: topFullCells,
           totalCellCount: totalGridCells,
-          isTop: true,
+          isTop: false,
         ),
-        // Neck of the hourglass
-        Container(
-          width: 20, // Wider neck for pixel style
-          height: 20,
-          color: Colors.grey[850],
-        ),
-        // Bottom Bulb
+
+        const SizedBox(height: 90),
+
         _PixelBulb(
+          key: const ValueKey('bottom'),
           sandCellCount: bottomFullCells,
           totalCellCount: totalGridCells,
-          isTop: false,
+          isTop: true,
         ),
       ],
     );
   }
 }
 
-// A widget to render one bulb (top or bottom) of the hourglass.
 class _PixelBulb extends StatelessWidget {
   const _PixelBulb({
+    super.key,
     required this.sandCellCount,
     required this.totalCellCount,
     required this.isTop,
@@ -351,38 +326,54 @@ class _PixelBulb extends StatelessWidget {
   final int totalCellCount;
   final bool isTop;
 
+  static final Map<int, int> _fillOrderMap = _buildFillOrderMap();
+
+  static Map<int, int> _buildFillOrderMap() {
+    const int gridWidth = 8;
+    const int totalCells = 64;
+    List<int> sortedIndices = List.generate(totalCells, (i) => i);
+    sortedIndices.sort((a, b) {
+      int levelA = (a ~/ gridWidth) + (a % gridWidth);
+      int levelB = (b ~/ gridWidth) + (b % gridWidth);
+      if (levelA != levelB) {
+        return levelA.compareTo(levelB);
+      } else {
+        return (a ~/ gridWidth).compareTo(b ~/ gridWidth);
+      }
+    });
+
+    final Map<int, int> map = {};
+    for (int i = 0; i < sortedIndices.length; i++) {
+      map[sortedIndices[i]] = i;
+    }
+    return map;
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Use a fixed-size container to hold the grid.
-    return Container(
-      width: 200,
-      height: 200,
-      child: GridView.builder(
-        physics: const NeverScrollableScrollPhysics(), // Disable scrolling
-        itemCount: totalCellCount,
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 8, // 8x8 grid
+    return Transform.rotate(
+      angle: pi / 4,
+      child: Container(
+        width: 200,
+        height: 200,
+        child: GridView.builder(
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: totalCellCount,
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 8,
+          ),
+          itemBuilder: (context, index) {
+            final int fillPriority = _fillOrderMap[index]!;
+            final bool isFull =
+                fillPriority >= (totalCellCount - sandCellCount);
+            return _Pixel(isFull: !isFull);
+          },
         ),
-        itemBuilder: (context, index) {
-          bool isFull;
-
-          if (isTop) {
-            // In the top bulb, sand drains from the bottom.
-            // We fill pixels from the top down.
-            isFull = index < sandCellCount;
-          } else {
-            // In the bottom bulb, sand fills from the bottom up.
-            isFull = index >= (totalCellCount - sandCellCount);
-          }
-
-          return _Pixel(isFull: isFull);
-        },
       ),
     );
   }
 }
 
-// A single "pixel" in our grid.
 class _Pixel extends StatelessWidget {
   const _Pixel({required this.isFull});
 
@@ -391,11 +382,9 @@ class _Pixel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.all(1.5), // Creates the grid line effect
+      margin: const EdgeInsets.all(1.5),
       decoration: BoxDecoration(
-        color: isFull
-            ? Colors.white
-            : const Color(0xFF222222), // "On" vs "Off"
+        color: isFull ? Colors.white : const Color(0xFF222222),
         borderRadius: BorderRadius.circular(2),
       ),
     );

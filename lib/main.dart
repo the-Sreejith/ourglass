@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'hourglass_screen.dart'; // Import the new screen
+import 'hourglass_screen.dart'; 
 
 void main() {
   runApp(const HourglassApp());
@@ -13,7 +13,6 @@ class HourglassApp extends StatelessWidget {
     return MaterialApp(
       title: 'Pixel Hourglass',
       theme: ThemeData.dark(),
-      // The home is now the HourglassPage from the new file
       home: const HourglassPage(), 
     );
   }
