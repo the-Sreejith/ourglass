@@ -1,20 +1,14 @@
 import 'dart:async';
 import 'package:sensors_plus/sensors_plus.dart';
 
-enum DeviceOrientation {
-  upright,
-  upsideDown,
-  tilted,
-}
-
 class SensorService {
-  final StreamController<DeviceOrientation> _orientationController =
+  final StreamController<int> _orientationController =
       StreamController.broadcast();
   
-  Stream<DeviceOrientation> get orientationStream => _orientationController.stream;
+  Stream<int> get orientationStream => _orientationController.stream;
 
   StreamSubscription? _accelerometerSubscription;
-  DeviceOrientation _currentOrientation = DeviceOrientation.tilted;
+  int _currentOrientationValue = 0; // 0 = tilted, 1 = upright, -1 = upside down
 
   static const double _orientationThreshold = 7.0;
 
@@ -25,23 +19,23 @@ class SensorService {
       final double y = event.y;
       final double z = event.z;
       
-      DeviceOrientation newOrientation;
+      int newOrientationValue;
 
       if (z.abs() < 4) {
         if (y > _orientationThreshold) {
-          newOrientation = DeviceOrientation.upright;
+          newOrientationValue = 1; // Upright
         } else if (y < -_orientationThreshold) {
-          newOrientation = DeviceOrientation.upsideDown;
+          newOrientationValue = -1; // Upside Down
         } else {
-          newOrientation = DeviceOrientation.tilted;
+          newOrientationValue = 0; // Tilted
         }
       } else {
-        newOrientation = DeviceOrientation.tilted;
+        newOrientationValue = 0; // Tilted
       }
      
-      if (newOrientation != _currentOrientation) {
-        _currentOrientation = newOrientation;
-        _orientationController.add(_currentOrientation);
+      if (newOrientationValue != _currentOrientationValue) {
+        _currentOrientationValue = newOrientationValue;
+        _orientationController.add(_currentOrientationValue);
       }
     });
   }
