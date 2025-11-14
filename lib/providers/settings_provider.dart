@@ -4,7 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 class HourglassSettings with ChangeNotifier {
   late SharedPreferences _prefs;
   
-  double _totalDurationInSeconds = 15.0; // Default value
+  double _totalDurationInSeconds = 90.0; // Default value
   bool _isLoading = true;
 
   // Getters
@@ -14,16 +14,16 @@ class HourglassSettings with ChangeNotifier {
   // Method to load settings from storage
   Future<void> loadSettings() async {
     _prefs = await SharedPreferences.getInstance();
-    // Retrieve saved duration, or use default (15.0) if none exists
-    _totalDurationInSeconds = _prefs.getDouble('duration') ?? 15.0;
+    // Retrieve saved duration, or use default if none exists
+    _totalDurationInSeconds = _prefs.getDouble('duration') ?? 90.0;
     _isLoading = false;
-    notifyListeners(); // Notify widgets that loading is complete
+    notifyListeners(); 
   }
 
   // Method to update and save the duration
   Future<void> updateDuration(double newDuration) async {
     _totalDurationInSeconds = newDuration;
-    notifyListeners(); // Notify widgets of the change
+    notifyListeners();
     await _prefs.setDouble('duration', newDuration);
   }
 }

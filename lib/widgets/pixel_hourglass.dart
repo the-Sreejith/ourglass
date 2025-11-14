@@ -7,36 +7,40 @@ class PixelHourglass extends StatelessWidget {
     required this.topSandFraction,
     required this.bottomSandFraction,
     required this.totalGridCells,
+    required this.orientation,
   });
 
   final double topSandFraction;
   final double bottomSandFraction;
   final int totalGridCells;
+  final int orientation;
 
   @override
   Widget build(BuildContext context) {
     final int topFullCells = (topSandFraction * totalGridCells).round();
     final int bottomFullCells = (bottomSandFraction * totalGridCells).round();
 
+    final bool isUpsideDown = orientation == -1;
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // This is the TOP bulb
         _PixelBulb(
           key: const ValueKey('top'),
           sandCellCount: topFullCells,
           totalCellCount: totalGridCells,
-          isBottomBulb: false, // It's the top bulb
+          isTop: isUpsideDown,
+          isUpsideDown: isUpsideDown,
         ),
 
         const SizedBox(height: 90),
 
-        // This is the BOTTOM bulb
         _PixelBulb(
           key: const ValueKey('bottom'),
           sandCellCount: bottomFullCells,
           totalCellCount: totalGridCells,
-          isBottomBulb: true, // It's the bottom bulb
+          isTop: !isUpsideDown,
+          isUpsideDown: isUpsideDown,
         ),
       ],
     );
@@ -48,50 +52,42 @@ class _PixelBulb extends StatelessWidget {
     super.key,
     required this.sandCellCount,
     required this.totalCellCount,
-    required this.isBottomBulb, // Changed from 'isTop' for clarity
+    required this.isTop,
+    required this.isUpsideDown,
   });
 
   final int sandCellCount;
   final int totalCellCount;
-  final bool isBottomBulb;
+  final bool isTop;
+  final bool isUpsideDown;
 
-  // This map is now static and built once.
   static final Map<int, int> _fillOrderMap = _buildFillOrderMap();
 
-  // ⭐️ MODIFIED: This function now sorts cells from the
-  // bottom-center vertex (index 63) outwards.
   static Map<int, int> _buildFillOrderMap() {
     const int gridWidth = 8;
     const int totalCells = 64;
-    const int gridEnd = gridWidth - 1; // 7
-
     List<int> sortedIndices = List.generate(totalCells, (i) => i);
-    
-    // Sort by distance from the bottom-right corner (index 63)
-    // which becomes the bottom vertex of the diamond.
+
     sortedIndices.sort((a, b) {
-      int rowA = a ~/ gridWidth;
-      int colA = a % gridWidth;
-      // "Level" is the Manhattan distance from the (7, 7) corner
-      int levelA = (gridEnd - rowA) + (gridEnd - colA);
-
-      int rowB = b ~/ gridWidth;
-      int colB = b % gridWidth;
-      int levelB = (gridEnd - rowB) + (gridEnd - colB);
-
+      final int rowA = a ~/ gridWidth;
+      final int colA = a % gridWidth;
+      final int levelA = rowA + colA;
+      final int distA = (rowA - colA).abs();
+      final int rowB = b ~/ gridWidth;
+      final int colB = b % gridWidth;
+      final int levelB = rowB + colB;
+      final int distB = (rowB - colB).abs();
       if (levelA != levelB) {
         return levelA.compareTo(levelB);
-      } else {
-        // Tie-breaker: fill bottom-most rows of a level first
-        return (gridEnd - rowA).compareTo(gridEnd - rowB);
       }
+      if (distA != distB) {
+        return distA.compareTo(distB);
+      }
+      return rowA.compareTo(rowB);
     });
 
     final Map<int, int> map = {};
     for (int i = 0; i < sortedIndices.length; i++) {
-      // { index: fill_priority }
-      // index 63 will have priority 0
-      // index 0 will have priority 63
       map[sortedIndices[i]] = i;
     }
     return map;
@@ -100,7 +96,7 @@ class _PixelBulb extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Transform.rotate(
-      angle: pi / 4,
+      angle: isTop ? 5 * pi / 4 : pi / 4,
       child: SizedBox(
         width: 200,
         height: 200,
@@ -112,25 +108,22 @@ class _PixelBulb extends StatelessWidget {
           ),
           itemBuilder: (context, index) {
             final int fillPriority = _fillOrderMap[index]!;
-            final bool isPixelFull;
 
-            // ⭐️ MODIFIED: The fill logic now depends on
-            // whether this is the top or bottom bulb.
-            if (isBottomBulb) {
-              // This is the BOTTOM bulb.
-              // It fills from priority 0 (bottom) up.
-              // If count=10, priorities 0-9 are full.
-              isPixelFull = fillPriority < sandCellCount;
+            bool isFull;
+
+            if (isUpsideDown) {
+              isFull = isTop
+                  ? fillPriority >=
+                        (totalCellCount -
+                            sandCellCount) 
+                  : fillPriority < sandCellCount;
             } else {
-              // This is the TOP bulb.
-              // It empties from priority 0 (bottom) up.
-              // The *remaining* sand (sandCellCount) is at the
-              // highest priorities (the top).
-              // If count=10, priorities 54-63 are full.
-              isPixelFull = fillPriority >= (totalCellCount - sandCellCount);
+              isFull = isTop
+                  ? fillPriority <
+                        sandCellCount 
+                  : fillPriority >= (totalCellCount - sandCellCount);
             }
-
-            return _Pixel(isFull: isPixelFull);
+            return _Pixel(isFull: isFull);
           },
         ),
       ),
