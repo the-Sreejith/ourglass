@@ -281,7 +281,8 @@ class _HourglassPageState extends State<HourglassPage> {
               topSandFraction: topFraction,
               bottomSandFraction: bottomFraction,
               totalGridCells: _gridCells,
-              orientation:_orientation
+              orientation:_orientation,
+              isFalling: _isFlowing,
             ),
           ],
         ),

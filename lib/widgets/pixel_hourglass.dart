@@ -8,12 +8,14 @@ class PixelHourglass extends StatelessWidget {
     required this.bottomSandFraction,
     required this.totalGridCells,
     required this.orientation,
+    required this.isFalling, 
   });
 
   final double topSandFraction;
   final double bottomSandFraction;
   final int totalGridCells;
   final int orientation;
+  final bool isFalling; 
 
   @override
   Widget build(BuildContext context) {
@@ -31,35 +33,37 @@ class PixelHourglass extends StatelessWidget {
           totalCellCount: totalGridCells,
           isTop: isUpsideDown,
           isUpsideDown: isUpsideDown,
+          isFalling: false, 
         ),
-
         const SizedBox(height: 90),
-
         _PixelBulb(
           key: const ValueKey('bottom'),
           sandCellCount: bottomFullCells,
           totalCellCount: totalGridCells,
           isTop: !isUpsideDown,
           isUpsideDown: isUpsideDown,
+          isFalling: isFalling, 
         ),
       ],
     );
   }
 }
 
-class _PixelBulb extends StatelessWidget {
+class _PixelBulb extends StatefulWidget {
   const _PixelBulb({
     super.key,
     required this.sandCellCount,
     required this.totalCellCount,
     required this.isTop,
     required this.isUpsideDown,
+    required this.isFalling, 
   });
 
   final int sandCellCount;
   final int totalCellCount;
   final bool isTop;
   final bool isUpsideDown;
+  final bool isFalling;
 
   static final Map<int, int> _fillOrderMap = _buildFillOrderMap();
 
@@ -94,36 +98,79 @@ class _PixelBulb extends StatelessWidget {
   }
 
   @override
+  State<_PixelBulb> createState() => _PixelBulbState();
+}
+
+class _PixelBulbState extends State<_PixelBulb>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _fallController;
+  late Animation<int> _fallingPixelIndex;
+
+  static const List<int> _diagonalIndicesList = [63, 54, 45, 36, 27, 18, 9, 0];
+
+  @override
+  void initState() {
+    super.initState();
+    _fallController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..repeat();
+
+    _fallingPixelIndex = IntTween(begin: 0, end: 7).animate(_fallController);
+  }
+
+  @override
+  void dispose() {
+    _fallController.dispose(); 
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Transform.rotate(
-      angle: isTop ? 5 * pi / 4 : pi / 4,
+      angle: widget.isTop ? 5 * pi / 4 : pi / 4,
       child: SizedBox(
         width: 200,
         height: 200,
-        child: GridView.builder(
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: totalCellCount,
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 8,
-          ),
-          itemBuilder: (context, index) {
-            final int fillPriority = _fillOrderMap[index]!;
+        child: AnimatedBuilder(
+          animation: _fallingPixelIndex,
+          builder: (context, child) {
+            return GridView.builder(
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: widget.totalCellCount,
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 8,
+              ),
+              itemBuilder: (context, index) {
+                final int fillPriority = _PixelBulb._fillOrderMap[index]!;
 
-            bool isFull;
+                bool isFull;
 
-            if (isUpsideDown) {
-              isFull = isTop
-                  ? fillPriority >=
-                        (totalCellCount -
-                            sandCellCount) 
-                  : fillPriority < sandCellCount;
-            } else {
-              isFull = isTop
-                  ? fillPriority <
-                        sandCellCount 
-                  : fillPriority >= (totalCellCount - sandCellCount);
-            }
-            return _Pixel(isFull: isFull);
+                if (widget.isUpsideDown) {
+                  isFull = widget.isTop
+                      ? fillPriority >=
+                            (widget.totalCellCount - widget.sandCellCount)
+                      : fillPriority < widget.sandCellCount;
+                } else {
+                  isFull = widget.isTop
+                      ? fillPriority < widget.sandCellCount
+                      : fillPriority >=
+                            (widget.totalCellCount - widget.sandCellCount);
+                }
+
+                bool isFallingPixel = false;
+                if (widget.isFalling) {
+                  final int currentFallingStep = _fallingPixelIndex.value;
+                  if (_diagonalIndicesList[currentFallingStep] == index) {
+                    isFallingPixel = true;
+                  }
+                }
+
+                final bool finalIsFull = isFull || isFallingPixel;
+
+                return _Pixel(isFull: finalIsFull);
+              },
+            );
           },
         ),
       ),
