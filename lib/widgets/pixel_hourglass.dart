@@ -8,14 +8,18 @@ class PixelHourglass extends StatelessWidget {
     required this.bottomSandFraction,
     required this.totalGridCells,
     required this.orientation,
-    required this.isFalling, 
+    required this.isFalling,
+    this.sandColor,
+    this.emptyColor,
   });
 
   final double topSandFraction;
   final double bottomSandFraction;
   final int totalGridCells;
   final int orientation;
-  final bool isFalling; 
+  final bool isFalling;
+  final Color? sandColor;
+  final Color? emptyColor;
 
   @override
   Widget build(BuildContext context) {
@@ -33,7 +37,9 @@ class PixelHourglass extends StatelessWidget {
           totalCellCount: totalGridCells,
           isTop: isUpsideDown,
           isUpsideDown: isUpsideDown,
-          isFalling: false, 
+          isFalling: false,
+          sandColor: sandColor,
+          emptyColor: emptyColor,
         ),
         const SizedBox(height: 90),
         _PixelBulb(
@@ -42,7 +48,9 @@ class PixelHourglass extends StatelessWidget {
           totalCellCount: totalGridCells,
           isTop: !isUpsideDown,
           isUpsideDown: isUpsideDown,
-          isFalling: isFalling, 
+          isFalling: isFalling,
+          sandColor: sandColor,
+          emptyColor: emptyColor,
         ),
       ],
     );
@@ -56,7 +64,9 @@ class _PixelBulb extends StatefulWidget {
     required this.totalCellCount,
     required this.isTop,
     required this.isUpsideDown,
-    required this.isFalling, 
+    required this.isFalling,
+    this.sandColor,
+    this.emptyColor,
   });
 
   final int sandCellCount;
@@ -64,6 +74,8 @@ class _PixelBulb extends StatefulWidget {
   final bool isTop;
   final bool isUpsideDown;
   final bool isFalling;
+  final Color? sandColor;
+  final Color? emptyColor;
 
   static final Map<int, int> _fillOrderMap = _buildFillOrderMap();
 
@@ -121,7 +133,7 @@ class _PixelBulbState extends State<_PixelBulb>
 
   @override
   void dispose() {
-    _fallController.dispose(); 
+    _fallController.dispose();
     super.dispose();
   }
 
@@ -168,7 +180,11 @@ class _PixelBulbState extends State<_PixelBulb>
 
                 final bool finalIsFull = isFull || isFallingPixel;
 
-                return _Pixel(isFull: finalIsFull);
+                return _Pixel(
+                  isFull: finalIsFull,
+                  sandColor: widget.sandColor,
+                  emptyColor: widget.emptyColor,
+                );
               },
             );
           },
@@ -179,16 +195,20 @@ class _PixelBulbState extends State<_PixelBulb>
 }
 
 class _Pixel extends StatelessWidget {
-  const _Pixel({required this.isFull});
+  const _Pixel({required this.isFull, this.sandColor, this.emptyColor});
 
   final bool isFull;
+  final Color? sandColor;
+  final Color? emptyColor;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.all(1.5),
       decoration: BoxDecoration(
-        color: isFull ? Colors.white : const Color(0xFF222222),
+        color: isFull
+            ? (sandColor ?? Colors.white)
+            : (emptyColor ?? const Color(0xFF222222)),
         borderRadius: BorderRadius.circular(2),
       ),
     );

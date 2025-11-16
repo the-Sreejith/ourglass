@@ -1,10 +1,13 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import '../services/sensor_service.dart';
-import '../providers/settings_provider.dart';
-import '../widgets/pixel_hourglass.dart';
+
+import 'package:ourglass/screens/settings_screen.dart';
+import 'package:ourglass/services/sensor_service.dart';
+import 'package:ourglass/providers/settings_provider.dart';
+import 'package:ourglass/widgets/pixel_hourglass.dart';
 
 class HourglassPage extends StatefulWidget {
   const HourglassPage({super.key});
@@ -19,13 +22,16 @@ class _HourglassPageState extends State<HourglassPage> {
   Timer? _sandTimer;
 
   // 0 = tilted, 1 = upright, -1 = upside down
-  int _orientation = 0; 
+  int _orientation = 0;
   bool _isFlowing = false;
+  bool _isManuallyPaused = false;
+  bool _hasPlayedSound = false;
 
   static const int _totalSand = 100;
   static const int _gridCells = 64;
 
-  double _totalDurationInSeconds = 15.0; // Local state, initialized from provider
+  double _totalDurationInSeconds =
+      15.0; // Local state, initialized from provider
   late Duration _sandTickDuration;
   double _timeLeftInSeconds = 0.0;
 
@@ -38,7 +44,7 @@ class _HourglassPageState extends State<HourglassPage> {
     // Initialize local state from the pre-loaded provider
     final settings = context.read<HourglassSettings>();
     _totalDurationInSeconds = settings.totalDurationInSeconds;
-    
+
     _timeLeftInSeconds = _totalDurationInSeconds;
     _updateTickDuration();
 
@@ -47,11 +53,26 @@ class _HourglassPageState extends State<HourglassPage> {
       _handleOrientationChange,
     );
 
+    // Listen to settings changes
+    settings.addListener(_onSettingsChanged);
+
     _startFlow();
+  }
+
+  void _onSettingsChanged() {
+    final settings = context.read<HourglassSettings>();
+    if (settings.totalDurationInSeconds != _totalDurationInSeconds) {
+      setState(() {
+        _totalDurationInSeconds = settings.totalDurationInSeconds;
+        _updateTickDuration();
+      });
+    }
   }
 
   @override
   void dispose() {
+    final settings = context.read<HourglassSettings>();
+    settings.removeListener(_onSettingsChanged);
     _sensorSubscription?.cancel();
     _sensorService.dispose();
     _sandTimer?.cancel();
@@ -75,6 +96,8 @@ class _HourglassPageState extends State<HourglassPage> {
   void _handleOrientationChange(int newOrientation) {
     if (newOrientation == _orientation) return;
 
+    final settings = context.read<HourglassSettings>();
+
     setState(() {
       _orientation = newOrientation;
     });
@@ -85,11 +108,19 @@ class _HourglassPageState extends State<HourglassPage> {
       _flipSand();
     }
 
-    // 1 = upright, -1 = upsideDown
+    // 1 = upright, -1 = upsideDown, 0 = tilted
     if (_orientation == 1 || _orientation == -1) {
-      _startFlow();
+      if (!_isManuallyPaused) {
+        _startFlow();
+      }
     } else {
-      _stopFlow();
+      // Only stop if tilted angles are not allowed
+      if (!settings.startInTiltedAngles) {
+        _stopFlow();
+      } else if (!_isManuallyPaused) {
+        // If tilted angles are allowed, keep flowing
+        _startFlow();
+      }
     }
   }
 
@@ -100,23 +131,37 @@ class _HourglassPageState extends State<HourglassPage> {
       _bottomSand = temp;
 
       // 1 = upright
-      int activeSand = (_orientation == 1)
-          ? _topSand
-          : _bottomSand;
+      int activeSand = (_orientation == 1) ? _topSand : _bottomSand;
       if (activeSand == 0) {
         _timeLeftInSeconds = 0.0;
       } else {
         _timeLeftInSeconds =
             _totalDurationInSeconds * (activeSand / _totalSand);
       }
+
+      // Reset sound flag when flipping (new timer cycle)
+      _hasPlayedSound = false;
     });
   }
 
   void _startFlow() {
-    if (_isFlowing) return;
+    if (_isFlowing || _isManuallyPaused) return;
 
-    if (_orientation == 1 && _topSand == 0) return;
+    final settings = context.read<HourglassSettings>();
+
+    // Check orientation requirements
+    if (!settings.startInTiltedAngles && _orientation == 0) {
+      return;
+    }
+
+    if (_orientation == 1 && _topSand == 0) {
+      // Timer finished, reset sound flag for next run
+      _hasPlayedSound = false;
+      return;
+    }
     if (_orientation == -1 && _bottomSand == 0) {
+      // Timer finished, reset sound flag for next run
+      _hasPlayedSound = false;
       return;
     }
 
@@ -138,14 +183,16 @@ class _HourglassPageState extends State<HourglassPage> {
     bool isFlowing = false;
     int activeSand = 0;
 
-    if (_orientation == 1) { // Upright
+    if (_orientation == 1) {
+      // Upright
       if (_topSand > 0) {
         _topSand--;
         _bottomSand++;
         activeSand = _topSand;
         isFlowing = true;
       }
-    } else if (_orientation == -1) { // Upside Down
+    } else if (_orientation == -1) {
+      // Upside Down
       if (_bottomSand > 0) {
         _bottomSand--;
         _topSand++;
@@ -164,7 +211,48 @@ class _HourglassPageState extends State<HourglassPage> {
       setState(() {
         _timeLeftInSeconds = 0.0;
       });
+
+      // Play sound when timer finishes
+      final settings = context.read<HourglassSettings>();
+      if (settings.soundEnabled && !_hasPlayedSound) {
+        _hasPlayedSound = true;
+        SystemSound.play(SystemSoundType.alert);
+      }
     }
+  }
+
+  void _togglePause() {
+    setState(() {
+      _isManuallyPaused = !_isManuallyPaused;
+      if (_isManuallyPaused) {
+        _stopFlow();
+      } else {
+        _startFlow();
+      }
+    });
+  }
+
+  void _resetTimer() {
+    final settings = context.read<HourglassSettings>();
+    setState(() {
+      // Use current settings value for duration
+      _totalDurationInSeconds = settings.totalDurationInSeconds;
+      _updateTickDuration();
+
+      _topSand = _totalSand;
+      _bottomSand = 0;
+      _timeLeftInSeconds = _totalDurationInSeconds;
+      _hasPlayedSound = false;
+      _isManuallyPaused = false;
+      _stopFlow();
+
+      // Restart if orientation allows
+      if (_orientation == 1 || _orientation == -1) {
+        _startFlow();
+      } else if (settings.startInTiltedAngles) {
+        _startFlow();
+      }
+    });
   }
 
   String _formatTime(double seconds) {
@@ -228,8 +316,7 @@ class _HourglassPageState extends State<HourglassPage> {
                       _timeLeftInSeconds = _totalDurationInSeconds;
 
                       _stopFlow();
-                      if (_orientation == 1 ||
-                          _orientation == -1) {
+                      if (_orientation == 1 || _orientation == -1) {
                         _startFlow();
                       }
                     });
@@ -249,44 +336,79 @@ class _HourglassPageState extends State<HourglassPage> {
     double topFraction = _topSand / _totalSand;
     double bottomFraction = _bottomSand / _totalSand;
 
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings),
-            onPressed: _showTimeEditDialog,
-          ),
-        ],
-      ),
-      body: Center(
-        child: Column(
-          children: [
-            GestureDetector(
-              onTap: _showTimeEditDialog,
-              child: Text(
-                _formatTime(_timeLeftInSeconds),
-                style: const TextStyle(
-                  fontSize: 48,
-                  color: Colors.white,
-                  fontWeight: FontWeight.w200,
-                  fontFamily: 'monospace',
-                ),
+    return Consumer<HourglassSettings>(
+      builder: (context, settings, child) {
+        return Scaffold(
+          backgroundColor: Colors.black,
+          appBar: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.settings),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const SettingsPage(),
+                    ),
+                  );
+                },
               ),
+            ],
+          ),
+          body: Center(
+            child: Column(
+              children: [
+                GestureDetector(
+                  onTap: _showTimeEditDialog,
+                  child: Text(
+                    _formatTime(_timeLeftInSeconds),
+                    style: const TextStyle(
+                      fontSize: 48,
+                      color: Colors.white,
+                      fontWeight: FontWeight.w200,
+                      fontFamily: 'monospace',
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 80),
+                PixelHourglass(
+                  topSandFraction: topFraction,
+                  bottomSandFraction: bottomFraction,
+                  totalGridCells: _gridCells,
+                  orientation: _orientation,
+                  isFalling: _isFlowing,
+                  sandColor: settings.sandColor,
+                  emptyColor: settings.emptyColor,
+                ),
+                if (settings.showButtons) ...[
+                  const SizedBox(height: 60),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      IconButton(
+                        icon: Icon(
+                          _isManuallyPaused ? Icons.play_arrow : Icons.pause,
+                          size: 32,
+                        ),
+                        color: Colors.white,
+                        onPressed: _togglePause,
+                      ),
+                      const SizedBox(width: 80),
+                      IconButton(
+                        icon: const Icon(Icons.refresh, size: 32),
+                        color: Colors.white,
+                        onPressed: _resetTimer,
+                      ),
+                    ],
+                  ),
+                ],
+              ],
             ),
-            const SizedBox(height: 80),
-            PixelHourglass(
-              topSandFraction: topFraction,
-              bottomSandFraction: bottomFraction,
-              totalGridCells: _gridCells,
-              orientation:_orientation,
-              isFalling: _isFlowing,
-            ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }

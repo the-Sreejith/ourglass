@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'providers/settings_provider.dart';
-import 'screens/hourglass_screen.dart';
+
+import 'package:ourglass/providers/settings_provider.dart';
+import 'package:ourglass/screens/hourglass_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
